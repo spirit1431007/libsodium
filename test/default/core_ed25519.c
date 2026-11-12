@@ -13,6 +13,15 @@ static const unsigned char max_canonical_p[32] = {
     0xe4, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f
 };
+static const unsigned char not_main_subgroup_p[32] = {
+    0x95, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99,
+    0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99
+};
+/* A point of order 8 */
+static const unsigned char torsion8_p[32] = {
+    0x26, 0xe8, 0x95, 0x8f, 0xc2, 0xb2, 0x27, 0xb0, 0x45, 0xc3, 0xf4, 0x89, 0xf2, 0xef, 0x98, 0xf0,
+    0xd5, 0xdf, 0xac, 0x05, 0xd3, 0xc6, 0x33, 0x39, 0xb1, 0x38, 0x02, 0x88, 0x6d, 0x53, 0xfc, 0x05
+};
 static const unsigned char L_p1[32] = {
     0xee, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10
@@ -33,6 +42,13 @@ static const unsigned char sc_highbit[32] = {
     0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80
 };
+/* Checks that inversion runs enough steps. */
+static const unsigned char sc_slow_invert[32] = {
+    0x78, 0x0d, 0xb2, 0xb5, 0x94, 0x5a, 0xcf, 0xdc,
+    0x38, 0x69, 0xae, 0x85, 0xf3, 0xb2, 0x6a, 0x90,
+    0x3f, 0xf4, 0x48, 0x35, 0x9b, 0xef, 0xb2, 0x68,
+    0xd1, 0x2f, 0xe5, 0xcb, 0x0b, 0x91, 0x14, 0x0f
+};
 
 static void
 add_P(unsigned char * const S)
@@ -45,6 +61,19 @@ add_P(unsigned char * const S)
     };
 
     sodium_add(S, P, sizeof P);
+}
+
+static void
+check_scalar_invert(const unsigned char *s)
+{
+    unsigned char inv[crypto_core_ed25519_SCALARBYTES];
+
+    if (crypto_core_ed25519_scalar_invert(inv, s) != 0) {
+        printf("crypto_core_ed25519_scalar_invert() failed\n");
+    }
+    crypto_core_ed25519_scalar_mul(inv, inv, s);
+    assert(inv[0] == 1);
+    assert(sodium_is_zero(inv + 1, crypto_core_ed25519_SCALARBYTES - 1));
 }
 
 static void
@@ -64,25 +93,16 @@ add_l64(unsigned char * const S)
 int
 main(void)
 {
-    unsigned char *h, *r;
+    unsigned char *h;
     unsigned char *p, *p2, *p3;
     unsigned char *sc, *sc2, *sc3;
     unsigned char *sc64;
-    unsigned char *seed;
     char          *hex;
     unsigned int   i, j;
 
     h = (unsigned char *) sodium_malloc(crypto_core_ed25519_HASHBYTES);
-    r = (unsigned char *) sodium_malloc(crypto_core_ed25519_UNIFORMBYTES);
     p = (unsigned char *) sodium_malloc(crypto_core_ed25519_BYTES);
     for (i = 0; i < 500; i++) {
-        randombytes_buf(r, crypto_core_ed25519_UNIFORMBYTES);
-        if (crypto_core_ed25519_from_uniform(p, r) != 0) {
-            printf("crypto_core_ed25519_from_uniform() failed\n");
-        }
-        if (crypto_core_ed25519_is_valid_point(p) == 0) {
-            printf("crypto_core_ed25519_from_uniform() returned an invalid point\n");
-        }
         crypto_core_ed25519_random(p);
         if (crypto_core_ed25519_is_valid_point(p) == 0) {
             printf("crypto_core_ed25519_random() returned an invalid point\n");
@@ -142,11 +162,20 @@ main(void)
     assert(crypto_core_ed25519_is_valid_point(p) == 0);
 
     p[0] = 9;
-    assert(crypto_core_ed25519_is_valid_point(p) == 1);
+    assert(crypto_core_ed25519_is_valid_point(p) == 0);
 
     assert(crypto_core_ed25519_is_valid_point(max_canonical_p) == 1);
     assert(crypto_core_ed25519_is_valid_point(non_canonical_invalid_p) == 0);
     assert(crypto_core_ed25519_is_valid_point(non_canonical_p) == 0);
+    assert(crypto_core_ed25519_is_valid_point(not_main_subgroup_p) == 0);
+
+    for (i = 0; i < 100; i++) {
+        crypto_core_ed25519_random(p2);
+        for (j = 1; j < 8; j++) {
+            crypto_core_ed25519_add(p2, p2, torsion8_p);
+            assert(crypto_core_ed25519_is_valid_point(p2) == 0);
+        }
+    }
 
     memcpy(p2, p, crypto_core_ed25519_BYTES);
     add_P(p2);
@@ -200,25 +229,6 @@ main(void)
     crypto_core_ed25519_scalar_reduce(sc64, sc64);
     if (memcmp(sc64, sc, crypto_core_ed25519_BYTES) != 0) {
         printf("crypto_core_ed25519_scalar_reduce() failed\n");
-    }
-
-    randombytes_buf(r, crypto_core_ed25519_UNIFORMBYTES);
-    crypto_core_ed25519_from_uniform(p, r);
-    memcpy(p2, p, crypto_core_ed25519_BYTES);
-    crypto_core_ed25519_scalar_random(sc);
-    if (crypto_scalarmult_ed25519_noclamp(p, sc, p) != 0) {
-        printf("crypto_scalarmult_ed25519_noclamp() failed (1)\n");
-    }
-    crypto_core_ed25519_scalar_complement(sc, sc);
-    if (crypto_scalarmult_ed25519_noclamp(p2, sc, p2) != 0) {
-        printf("crypto_scalarmult_ed25519_noclamp() failed (2)\n");
-    }
-    crypto_core_ed25519_add(p3, p, p2);
-    crypto_core_ed25519_from_uniform(p, r);
-    crypto_core_ed25519_sub(p, p, p3);
-    assert(p[0] == 0x01);
-    for (i = 1; i < crypto_core_ed25519_BYTES; i++) {
-        assert(p[i] == 0);
     }
 
     crypto_core_ed25519_random(p);
@@ -327,10 +337,19 @@ main(void)
         crypto_core_ed25519_scalar_add(sc3, sc, sc2);
         assert(!sodium_is_zero(sc, crypto_core_ed25519_SCALARBYTES));
         crypto_core_ed25519_scalar_sub(sc3, sc3, sc2);
-        assert(!sodium_is_zero(sc, crypto_core_ed25519_SCALARBYTES));
         crypto_core_ed25519_scalar_sub(sc3, sc3, sc);
         assert(sodium_is_zero(sc3, crypto_core_ed25519_SCALARBYTES));
+        check_scalar_invert(sc);
     }
+
+    check_scalar_invert(L_1);
+    check_scalar_invert(L_p1);
+    check_scalar_invert(sc_highbit);
+    check_scalar_invert(sc_slow_invert);
+    if (crypto_core_ed25519_scalar_invert(sc, L) != 0) {
+        printf("crypto_core_ed25519_scalar_invert() failed\n");
+    }
+    assert(sodium_is_zero(sc, crypto_core_ed25519_SCALARBYTES));
 
     memset(sc, 0x69, crypto_core_ed25519_SCALARBYTES);
     memset(sc2, 0x42, crypto_core_ed25519_SCALARBYTES);
@@ -400,17 +419,6 @@ main(void)
         assert(memcmp(sc3, sc, crypto_core_ed25519_SCALARBYTES) != 0);
     }
 
-    seed = (unsigned char *) sodium_malloc(randombytes_SEEDBYTES);
-    for (i = 0; i < 15; i++) {
-        randombytes_buf_deterministic(r, crypto_core_ed25519_UNIFORMBYTES, seed);
-        if (crypto_core_ed25519_from_uniform(p, r) != 0) {
-            printf("crypto_core_ed25519_from_uniform() failed\n");
-        }
-        sodium_bin2hex(hex, crypto_core_ed25519_SCALARBYTES * 2 + 1,
-                       p, crypto_core_ed25519_BYTES);
-        printf("from_uniform_deterministic (%u): %s\n", i, hex);
-        sodium_increment(seed, randombytes_SEEDBYTES);
-    }
     crypto_core_ed25519_scalar_mul(sc, L_1, sc_8);
     sodium_bin2hex(hex, crypto_core_ed25519_SCALARBYTES * 2 + 1,
                    sc, crypto_core_ed25519_SCALARBYTES);
@@ -518,7 +526,6 @@ main(void)
                    sc, crypto_core_ed25519_SCALARBYTES);
     printf("h*2: %s\n", hex);
 
-    sodium_free(seed);
     sodium_free(hex);
     sodium_free(sc64);
     sodium_free(sc3);
@@ -527,7 +534,6 @@ main(void)
     sodium_free(p3);
     sodium_free(p2);
     sodium_free(p);
-    sodium_free(r);
     sodium_free(h);
 
     assert(crypto_core_ed25519_BYTES == crypto_core_ed25519_bytes());

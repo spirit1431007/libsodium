@@ -8,17 +8,33 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
+  version-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check version consistency
+        run: ./test/check-version-consistency.sh
+
   tcc:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Update packages list
         run: sudo apt-get update
 
       - name: Install dependencies
-        run: sudo apt-get install -y build-essential libtool autoconf automake tcc
+        run: |
+          sudo apt-get install -y build-essential libtool autoconf automake tcc
 
       - name: Autogen
         run: ./autogen.sh -s
@@ -31,10 +47,56 @@ jobs:
           make uninstall
           make distclean
 
+  zig:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Update packages list
+        run: sudo apt-get update
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: master
+
+      - name: Autogen
+        run: ./autogen.sh -s
+
+      - name: Compilation with zig
+        run: |
+          zig build
+          zig build -Dtarget=x86_64-linux
+          zig build -Dtarget=aarch64-linux
+          zig build -Dtarget=x86-windows
+          zig build -Dtarget=x86_64-windows
+          zig build -Dtarget=aarch64-windows
+          zig build -Dtarget=x86_64-macos
+          zig build -Dtarget=aarch64-macos
+          zig build -Dtarget=x86_64-freebsd
+          zig build -Dtarget=aarch64-freebsd
+          zig build -Dtarget=wasm32-freestanding
+          zig build -Dtarget=wasm32-freestanding -Dwasm_freestanding_libc=false
+          zig build -Doptimize=ReleaseFast
+          rm -fr zig-cache zig-out
+
+      - name: Tests with zig
+        run: |
+          zig build test
+          zig build test-vectors
+          zig build test -Doptimize=ReleaseSafe
+          zig build test-vectors -Doptimize=ReleaseSafe
+          zig build test -Doptimize=ReleaseFast
+          zig build test-vectors -Doptimize=ReleaseFast
+
   regular:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Update packages list
         run: sudo apt-get update
@@ -63,7 +125,9 @@ jobs:
   check-globals:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Update packages list
         run: sudo apt-get update
@@ -81,7 +145,9 @@ jobs:
   other-comp:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Update packages list
         run: sudo apt-get update
@@ -107,13 +173,15 @@ jobs:
   other-arch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Update packages list
         run: sudo apt-get update
 
       - name: Install dependencies
-        run: sudo apt-get install -y build-essential libtool autoconf automake qemu-user-static gcc-powerpc-linux-gnu
+        run: sudo apt-get install -y build-essential libtool autoconf automake gcc-powerpc-linux-gnu
 
       - name: Autogen
         run: ./autogen.sh -s
@@ -124,10 +192,105 @@ jobs:
           make -j $(nproc)
           make clean > /dev/null
 
+  mingw-clang:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Update packages list
+        run: sudo apt-get update
+
+      - name: Install dependencies
+        run: sudo apt-get install -y build-essential libtool autoconf automake clang mingw-w64
+
+      - name: Autogen
+        run: ./autogen.sh -s
+
+      - name: MinGW cross-compilation with clang
+        run: |
+          for arch in i686 x86_64; do
+            env CC="clang --target=${arch}-w64-mingw32" CPPFLAGS="-DDEV_MODE=1" ./configure --disable-dependency-tracking --host=${arch}-w64-mingw32
+            make -j $(nproc)
+            make distclean > /dev/null
+          done
+
+  aarch64-gcc:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Update packages list
+        run: sudo apt-get update
+
+      - name: Install dependencies
+        run: sudo apt-get install -y build-essential libtool autoconf automake
+
+      - name: Autogen
+        run: ./autogen.sh -s
+
+      - name: Compilation with GCC on aarch64
+        run: |
+          env CPPFLAGS="-DDEV_MODE=1" ./configure --disable-dependency-tracking
+          make -j $(nproc)
+          make check
+          make distclean > /dev/null
+
+  aarch64-gcc-crypto:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Update packages list
+        run: sudo apt-get update
+
+      - name: Install dependencies
+        run: sudo apt-get install -y build-essential libtool autoconf automake
+
+      - name: Autogen
+        run: ./autogen.sh -s
+
+      - name: Compilation with GCC on aarch64 with NEON and ARM Crypto extensions
+        run: |
+          env CFLAGS="-march=armv8-a+crypto" CPPFLAGS="-DDEV_MODE=1" ./configure --disable-dependency-tracking
+          make -j $(nproc)
+          make check
+          make distclean > /dev/null
+
+  aarch64-gcc-sha3:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Update packages list
+        run: sudo apt-get update
+
+      - name: Install dependencies
+        run: sudo apt-get install -y build-essential libtool autoconf automake
+
+      - name: Autogen
+        run: ./autogen.sh -s
+
+      - name: Compilation with GCC on aarch64 with NEON, ARM Crypto, and SHA3 extensions
+        run: |
+          env CFLAGS="-march=armv8-a+crypto+sha3" CPPFLAGS="-DDEV_MODE=1" ./configure --disable-dependency-tracking
+          make -j $(nproc)
+          make check
+          make distclean > /dev/null
+
   android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Update packages list
         run: sudo apt-get update
@@ -141,10 +304,9 @@ jobs:
       - name: Install Android NDK
         run: |
           mkdir /tmp/android && cd /tmp/android
-          curl -o ndk.zip -L https://dl.google.com/android/repository/android-ndk-r23-beta2-linux-x86_64.zip
+          curl -o ndk.zip -L https://dl.google.com/android/repository/android-ndk-r29-linux.zip
           unzip ndk.zip && rm -f *.zip && mv android-ndk* ndk
 
       - name: Android compilation
         run: |
-          env ANDROID_NDK_HOME=/tmp/android/ndk ./dist-build/android-x86.sh
-          env ANDROID_NDK_HOME=/tmp/android/ndk ./dist-build/android-armv8-a.sh
+          env ANDROID_NDK_HOME=/tmp/android/ndk ./dist-build/android-aar.sh

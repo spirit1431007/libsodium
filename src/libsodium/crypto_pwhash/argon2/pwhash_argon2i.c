@@ -144,8 +144,8 @@ crypto_pwhash_argon2i(unsigned char *const out, unsigned long long outlen,
 {
     memset(out, 0, outlen);
     if (outlen > crypto_pwhash_argon2i_BYTES_MAX) {
-        errno = EFBIG;
-        return -1;
+        errno = EFBIG; /* LCOV_EXCL_LINE */
+        return -1;     /* LCOV_EXCL_LINE */
     }
     if (outlen < crypto_pwhash_argon2i_BYTES_MIN) {
         errno = EINVAL;
@@ -164,8 +164,8 @@ crypto_pwhash_argon2i(unsigned char *const out, unsigned long long outlen,
         return -1;
     }
     if ((const void *) out == (const void *) passwd) {
-        errno = EINVAL;
-        return -1;
+        errno = EINVAL; /* LCOV_EXCL_LINE */
+        return -1;      /* LCOV_EXCL_LINE */
     }
     switch (alg) {
     case crypto_pwhash_argon2i_ALG_ARGON2I13:
@@ -214,8 +214,8 @@ crypto_pwhash_argon2i_str(char out[crypto_pwhash_argon2i_STRBYTES],
 }
 
 int
-crypto_pwhash_argon2i_str_verify(const char str[crypto_pwhash_argon2i_STRBYTES],
-                                 const char *const  passwd,
+crypto_pwhash_argon2i_str_verify(const char * str,
+                                 const char * const passwd,
                                  unsigned long long passwdlen)
 {
     int verify_ret;
@@ -280,14 +280,14 @@ _needs_rehash(const char *str, unsigned long long opslimit, size_t memlimit,
 }
 
 int
-crypto_pwhash_argon2i_str_needs_rehash(const char str[crypto_pwhash_argon2i_STRBYTES],
+crypto_pwhash_argon2i_str_needs_rehash(const char * str,
                                        unsigned long long opslimit, size_t memlimit)
 {
     return _needs_rehash(str, opslimit, memlimit, Argon2_i);
 }
 
 int
-crypto_pwhash_argon2id_str_needs_rehash(const char str[crypto_pwhash_argon2id_STRBYTES],
+crypto_pwhash_argon2id_str_needs_rehash(const char * str,
                                         unsigned long long opslimit, size_t memlimit)
 {
     return _needs_rehash(str, opslimit, memlimit, Argon2_id);

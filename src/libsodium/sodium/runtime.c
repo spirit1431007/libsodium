@@ -11,6 +11,9 @@
 #ifdef HAVE_SYS_AUXV_H
 # include <sys/auxv.h>
 #endif
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+# include <intrin.h>
+#endif
 
 #include "private/common.h"
 #include "runtime.h"
@@ -64,12 +67,12 @@ _sodium_runtime_arm_cpu_features(CPUFeatures * const cpu_features)
     return -1; /* LCOV_EXCL_LINE */
 #endif
 
-#if defined(__ARM_NEON) || defined(__aarch64__)
+#if defined(__ARM_NEON) || defined(__aarch64__) || defined(_M_ARM64)
     cpu_features->has_neon = 1;
-#elif defined(HAVE_ANDROID_GETCPUFEATURES) && defined(ANDROID_CPU_ARM_FEATURE_NEON)
+#elif defined(HAVE_ANDROID_GETCPUFEATURES)
     cpu_features->has_neon =
-        (android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_NEON) != 0x0;
-#elif defined(__aarch64__) && defined(AT_HWCAP)
+        (android_getCpuFeatures() & ANDROID_CPU_ARM64_FEATURE_ASIMD) != 0x0;
+#elif (defined(__aarch64__) || defined(_M_ARM64)) && defined(AT_HWCAP)
 # ifdef HAVE_GETAUXVAL
     cpu_features->has_neon = (getauxval(AT_HWCAP) & (1L << 1)) != 0;
 # elif defined(HAVE_ELF_AUX_INFO)
@@ -97,8 +100,10 @@ _sodium_runtime_arm_cpu_features(CPUFeatures * const cpu_features)
         return 0;
     }
 
-#if __ARM_FEATURE_CRYPTO
+#if defined(__ARM_FEATURE_CRYPTO) && defined(__ARM_FEATURE_AES)
     cpu_features->has_armcrypto = 1;
+#elif defined(_M_ARM64)
+    cpu_features->has_armcrypto = 1; /* assuming all CPUs supported by ARM Windows have the crypto extensions */
 #elif defined(__APPLE__) && defined(CPU_TYPE_ARM64) && defined(CPU_SUBTYPE_ARM64E)
     {
         cpu_type_t    cpu_type;
@@ -115,10 +120,10 @@ _sodium_runtime_arm_cpu_features(CPUFeatures * const cpu_features)
             cpu_features->has_armcrypto = 1;
         }
     }
-#elif defined(HAVE_ANDROID_GETCPUFEATURES) && defined(ANDROID_CPU_ARM_FEATURE_AES)
+#elif defined(HAVE_ANDROID_GETCPUFEATURES)
     cpu_features->has_armcrypto =
-        (android_getCpuFeatures() & ANDROID_CPU_ARM_FEATURE_AES) != 0x0;
-#elif defined(__aarch64__) && defined(AT_HWCAP)
+        (android_getCpuFeatures() & ANDROID_CPU_ARM64_FEATURE_AES) != 0x0;
+#elif (defined(__aarch64__) || defined(_M_ARM64)) && defined(AT_HWCAP)
 # ifdef HAVE_GETAUXVAL
     cpu_features->has_armcrypto = (getauxval(AT_HWCAP) & (1L << 3)) != 0;
 # elif defined(HAVE_ELF_AUX_INFO)
@@ -148,8 +153,13 @@ _sodium_runtime_arm_cpu_features(CPUFeatures * const cpu_features)
 static void
 _cpuid(unsigned int cpu_info[4U], const unsigned int cpu_info_type)
 {
-#if defined(_MSC_VER) && \
-    (defined(_M_X64) || defined(_M_AMD64) || defined(_M_IX86))
+    /*
+     * Visual Studio has a __cpuid() intrinsic with 2 parameters,
+     * but clang defines _MSC_VER as an incompatible __cpuid() macro
+     * with 5 parameters, that may be defined if <cpuid.h> is
+     * unintentionally included.
+     */
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86)) && !defined(__cpuid)
     __cpuid((int *) cpu_info, cpu_info_type);
 #elif defined(HAVE_CPUID)
     cpu_info[0] = cpu_info[1] = cpu_info[2] = cpu_info[3] = 0;
@@ -250,7 +260,7 @@ _sodium_runtime_intel_cpu_features(CPUFeatures * const cpu_features)
             pop ecx
             pop eax
         }
-# elif defined(HAVE_AVX_ASM)
+# elif defined(HAVE_AVX_ASM) || defined(HAVE_XGETBV_ASM)
         __asm__ __volatile__(".byte 0x0f, 0x01, 0xd0" /* XGETBV */
                              : "=a"(xcr0)
                              : "c"((uint32_t) 0U)

@@ -1,6 +1,7 @@
 EXTRA_DIST = \
 	msvc/build/buildall.bat \
 	msvc/build/buildbase.bat \
+	msvc/properties/ARM64.props \
 	msvc/properties/Common.props \
 	msvc/properties/Debug.props \
 	msvc/properties/DebugDEXE.props \
@@ -23,6 +24,7 @@ EXTRA_DIST = \
 	msvc/properties/ReleaseLIB.props \
 	msvc/properties/ReleaseLTCG.props \
 	msvc/properties/ReleaseSEXE.props \
+	msvc/properties/ARM64.props \
 	msvc/properties/Win32.props \
 	msvc/properties/x64.props \
 	msvc/resource.h \
@@ -69,4 +71,29 @@ EXTRA_DIST = \
 	msvc/vs2019/libsodium/libsodium.xml \
 	msvc/vs2019/libsodium.import.props \
 	msvc/vs2019/libsodium.import.xml \
-	msvc/vs2019/libsodium.sln
+	msvc/vs2019/libsodium.sln \
+	msvc/vs2022/libsodium/libsodium.props \
+	msvc/vs2022/libsodium/libsodium.vcxproj \
+	msvc/vs2022/libsodium/libsodium.vcxproj.filters \
+	msvc/vs2022/libsodium/libsodium.xml \
+	msvc/vs2022/libsodium.import.props \
+	msvc/vs2022/libsodium.import.xml \
+	msvc/vs2022/libsodium.sln \
+	msvc/vs2026/libsodium/libsodium.props \
+	msvc/vs2026/libsodium/libsodium.vcxproj \
+	msvc/vs2026/libsodium/libsodium.vcxproj.filters \
+	msvc/vs2026/libsodium/libsodium.xml \
+	msvc/vs2026/libsodium.import.props \
+	msvc/vs2026/libsodium.import.xml \
+	msvc/vs2026/libsodium.sln \
+	wasm32-freestanding/libc.c \
+	wasm32-freestanding/include/assert.h \
+	wasm32-freestanding/include/errno.h \
+	wasm32-freestanding/include/fcntl.h \
+	wasm32-freestanding/include/stdlib.h \
+	wasm32-freestanding/include/string.h \
+	wasm32-freestanding/include/time.h \
+	wasm32-freestanding/include/unistd.h \
+	wasm32-freestanding/include/sys/stat.h \
+	wasm32-freestanding/include/sys/time.h \
+	wasm32-freestanding/include/sys/types.h

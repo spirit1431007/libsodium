@@ -2,6 +2,8 @@
 
 set -e
 
+LIBSODIUM=${LIBSODIUM:-/tmp/sodium/lib/libsodium.30.dylib}
+
 symbols() {
   {
     SUMO="$1"
@@ -17,7 +19,7 @@ symbols() {
       fi
     done <emscripten-symbols.def
 
-    /usr/bin/nm /usr/local/lib/libsodium.27.dylib |
+    /usr/bin/nm "$LIBSODIUM" |
       fgrep ' T _' |
       cut -d' ' -f3 | {
       while read symbol; do
@@ -35,7 +37,7 @@ symbols() {
   } |
     sort |
     {
-      out='"_malloc","_free"'
+      out='"_malloc","_free","_emscripten_stack_get_end","_emscripten_stack_get_current"'
       while read symbol; do
         if [ ! -z "$out" ]; then
           out="${out},"

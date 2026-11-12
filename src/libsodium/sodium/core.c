@@ -45,6 +45,9 @@ sodium_init(void)
     _crypto_scalarmult_curve25519_pick_best_implementation();
     _crypto_stream_chacha20_pick_best_implementation();
     _crypto_stream_salsa20_pick_best_implementation();
+    _crypto_aead_aegis128l_pick_best_implementation();
+    _crypto_aead_aegis256_pick_best_implementation();
+    _crypto_ipcrypt_pick_best_implementation();
     initialized = 1;
     if (sodium_crit_leave() != 0) {
         return -1; /* LCOV_EXCL_LINE */
@@ -152,7 +155,7 @@ sodium_crit_enter(void)
         (void) nanosleep(&q, NULL);
 # elif defined(__x86_64__) || defined(__i386__)
         __asm__ __volatile__ ("pause":::"memory");
-# elif defined(__aarch64__)
+# elif defined(__aarch64__) || defined(_M_ARM64)
         __asm__ __volatile__ ("yield":::"memory");
 # endif
     }
@@ -193,7 +196,7 @@ sodium_misuse(void)
     (void) sodium_crit_leave();
     if (sodium_crit_enter() == 0) {
         handler = _misuse_handler;
-        if (handler != NULL) {
+        if (sodium_crit_leave() == 0 && handler != NULL) {
             handler();
         }
     }

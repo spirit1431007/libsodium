@@ -1,5 +1,6 @@
 #ifdef HAVE_AMD64_ASM
 
+#include "private/asm_cet.h"
 #include "salsa20_xmm6-asm_namespace.h"
 
 .text
@@ -17,6 +18,8 @@ ASM_HIDE_SYMBOL _stream_salsa20_xmm6
 #endif
 stream_salsa20_xmm6:
 _stream_salsa20_xmm6:
+
+_CET_ENDBR
 mov %rsp,%r11
 and $31,%r11
 add $512,%r11
@@ -58,6 +61,7 @@ ASM_HIDE_SYMBOL _stream_salsa20_xmm6_xor_ic
 stream_salsa20_xmm6_xor_ic:
 _stream_salsa20_xmm6_xor_ic:
 
+_CET_ENDBR
 mov %rsp,%r11
 and $31,%r11
 add $512,%r11
@@ -957,6 +961,9 @@ jmp ._bytesbetween1and255
 
 #endif
 
-#if defined(__linux__) && defined(__ELF__)
+#if defined(__ELF__) && \
+    (defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || \
+     defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || \
+     defined(__gnu_hurd__))
 .section .note.GNU-stack,"",%progbits
 #endif

@@ -5,10 +5,12 @@
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <stdlib.h>
 #include <string.h>
 #if !defined(_MSC_VER) && !defined(__BORLANDC__)
 # include <unistd.h>
+#endif
+#if !defined(__STDC_NO_THREADS__) && defined(HAVE_THREADS_H)
+# include <threads.h>
 #endif
 
 #include <sys/types.h>
@@ -32,21 +34,22 @@
 #   define HAVE_LINUX_COMPATIBLE_GETRANDOM
 #  endif
 # endif
+#elif defined(__midipix__)
+# define HAVE_LINUX_COMPATIBLE_GETRANDOM
 #elif defined(__FreeBSD__)
 # include <sys/param.h>
 # if defined(__FreeBSD_version) && __FreeBSD_version >= 1200000
 #  define HAVE_LINUX_COMPATIBLE_GETRANDOM
 # endif
 #endif
+#ifdef HAVE_COMMONCRYPTO_COMMONRANDOM_H
+# include <CommonCrypto/CommonRandom.h>
+#endif
 #if !defined(NO_BLOCKING_RANDOM_POLL) && defined(__linux__)
 # define BLOCK_ON_DEV_RANDOM
 #endif
 #ifdef BLOCK_ON_DEV_RANDOM
 # include <poll.h>
-#endif
-#ifdef HAVE_RDRAND
-# pragma GCC target("rdrnd")
-# include <immintrin.h>
 #endif
 
 #include "core.h"
@@ -75,7 +78,8 @@ BOOLEAN NTAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBufferLength);
 
 #define INTERNAL_RANDOM_BLOCK_SIZE crypto_core_hchacha20_OUTPUTBYTES
 
-#if defined(__OpenBSD__) || defined(__CloudABI__) || defined(__wasi__)
+#if defined(__OpenBSD__) || defined(__CloudABI__) || \
+    (defined(__wasm__) && !defined(__EMSCRIPTEN__))
 # define HAVE_SAFE_ARC4RANDOM 1
 #endif
 #if defined(__CloudABI__) || defined(__wasm__)
@@ -94,11 +98,23 @@ BOOLEAN NTAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBufferLength);
 #endif
 
 #ifndef TLS
-# ifdef _WIN32
+# if !defined(CONFIGURED) && !defined(__STDC_NO_THREADS__) && \
+     defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+#  define TLS _Thread_local
+# elif defined(_WIN32)
 #  define TLS __declspec(thread)
 # else
 #  define TLS
 # endif
+#endif
+
+#ifdef HAVE_RDRAND
+# ifdef __clang__
+#  pragma clang attribute push(__attribute__((target("rdrnd"))), apply_to = function)
+# elif defined(__GNUC__)
+#  pragma GCC target("rdrnd")
+# endif
+# include <immintrin.h>
 #endif
 
 typedef struct InternalRandomGlobal_ {
@@ -175,7 +191,18 @@ randombytes_internal_random_init(void)
 
 #else /* _WIN32 */
 
-# ifdef HAVE_GETENTROPY
+# ifdef HAVE_COMMONCRYPTO_COMMONRANDOM_H
+static int
+randombytes_getentropy(void * const buf, const size_t size)
+{
+    if (CCRandomGenerateBytes(buf, size) != kCCSuccess) {
+        return -1; /* LCOV_EXCL_LINE */
+    }
+    return 0;
+}
+
+# elif defined(HAVE_GETENTROPY)
+
 static int
 _randombytes_getentropy(void * const buf, const size_t size)
 {
@@ -499,7 +526,7 @@ randombytes_internal_random_close(void)
     if (global.getrandom_available != 0) {
         ret = 0;
     }
-# elif !defined(NONEXISTENT_DEV_RANDOM) && defined(HAVE_SAFE_ARC4RANDOM)
+# elif defined(HAVE_SAFE_ARC4RANDOM)
     ret = 0;
 # else
     if (global.random_data_source_fd != -1 &&
@@ -635,3 +662,9 @@ struct randombytes_implementation randombytes_internal_implementation = {
     SODIUM_C99(.buf =) randombytes_internal_random_buf,
     SODIUM_C99(.close =) randombytes_internal_random_close
 };
+
+#ifdef HAVE_RDRAND
+# ifdef __clang__
+#  pragma clang attribute pop
+# endif
+#endif

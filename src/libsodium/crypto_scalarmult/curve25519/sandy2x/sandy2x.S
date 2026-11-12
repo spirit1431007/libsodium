@@ -4,12 +4,14 @@
 
 #include "consts.S"
 #include "fe51_mul.S"
-#include "fe51_nsquare.S"
 #include "fe51_pack.S"
 #include "ladder.S"
 
-#if defined(__linux__) && defined(__ELF__)
-.section .note.GNU-stack,"",%progbits
 #endif
 
+#if defined(__ELF__) && \
+    (defined(__linux__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || \
+     defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || \
+     defined(__gnu_hurd__))
+.section .note.GNU-stack,"",%progbits
 #endif
